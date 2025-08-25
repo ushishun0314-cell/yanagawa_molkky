@@ -25,25 +25,26 @@
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .card{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(2,8,23,.06);padding:14px}
 
-  /* ==== プレイヤー設定を縦並びの行に（スマホで崩れない） ==== */
+  /* ==== プレイヤー設定：さらに見やすく ==== */
   .players{display:flex;flex-direction:column;gap:10px}
   .player-row{
     display:flex;align-items:center;gap:10px;padding:10px;
-    background:var(--card);border:1px solid #e5e7eb;border-radius:12px;
+    border:1px solid #e5e7eb;border-radius:12px;background:#fff;
   }
   .player-handle{
     width:34px;height:34px;border-radius:10px;border:1px solid #e5e7eb;
     display:flex;align-items:center;justify-content:center;background:#fff;
-    font-size:18px;user-select:none;cursor:grab
+    font-size:18px;user-select:none;cursor:grab;flex:0 0 34px;
   }
   .player-row input{flex:1;min-height:42px;font-size:16px}
-  .player-del{min-height:42px}
+  .player-del{
+    width:42px;height:42px;border-radius:10px;font-size:18px;line-height:1;cursor:pointer;
+  }
 
   input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
   button{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer}
   button.primary{border-color:var(--acc);color:#fff;background:var(--acc)}
   button.warn{border-color:var(--warn);background:var(--warn);color:#fff}
-  button.ghost{background:#fff}
   button:disabled{opacity:.55;cursor:not-allowed}
   .pill{padding:4px 8px;border-radius:999px;background:#e5e7eb;color:#111;font-size:12px}
   .current{outline:2px solid var(--acc);border-radius:10px}
@@ -58,6 +59,8 @@
   .toast.show{opacity:1}
   .spacer{flex:1}
   .btn-alt{border-color:#d1d5db}
+
+  /* 分析モーダル */
   .modalBG{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
   .modal{max-width:1040px;width:100%;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:16px;max-height:90vh;overflow:auto}
   .bar{height:10px;border-radius:6px;background:#e5e7eb;overflow:hidden}
@@ -66,17 +69,30 @@
   .note{font-size:12px;color:#64748b}
   .grid-heat{display:grid;grid-template-columns:repeat(6,minmax(40px,1fr));gap:6px}
   .cell{border:1px solid #e5e7eb;border-radius:8px;padding:6px}
+
+  /* ====== コンパクトUI（スマホ） ====== */
   @media (max-width: 640px){
-    body{font-size:16px}
+    body{font-size:15px}
     .head-inner{padding:8px 12px}
     .container{padding:12px}
-    button{min-height:44px;font-size:16px}
-    input{min-height:42px;font-size:16px}
-    .grid{grid-template-columns:repeat(3,1fr)}
-    .modal{width:100%;max-width:none;height:100svh;max-height:none;border-radius:0;padding:12px}
+    th,td{padding:6px;font-size:13px}
+    .grid{grid-template-columns:repeat(4,1fr);gap:6px}
+    .grid button{padding:8px 6px;font-size:15px;min-height:38px}
+    button{min-height:40px}
+    input{min-height:40px}
     .player-row{padding:8px}
+    .player-handle{width:30px;height:30px;font-size:16px}
+    .player-del{width:38px;height:38px}
+    .modal{width:100%;max-width:none;height:100svh;max-height:none;border-radius:0;padding:12px}
   }
+
   .tableWrap{overflow-x:auto}
+
+  /* ==== 勝利時カスタムモーダル ==== */
+  .askBG{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .ask{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .ask h3{margin:0 0 8px}
+  .ask .row{justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -102,9 +118,9 @@
     <div id="playerList" class="players"></div>
     <div class="row" style="margin-top:8px">
       <button id="addPlayerBtn">＋ プレイヤー追加</button>
-      <button id="shuffleBtn" class="ghost">先攻シャッフル</button>
+      <button id="shuffleBtn" class="btn-alt">先攻シャッフル</button>
       <button id="startBtn" class="primary">ゲーム開始</button>
-      <span class="muted">ドラッグで並び替え可（先攻決め）</span>
+      <span class="muted">先頭の「≡」をドラッグで並び替え（先攻決め）</span>
     </div>
   </section>
 
@@ -113,9 +129,9 @@
     <div class="row" style="justify-content:space-between">
       <div>現在の投擲: <span id="currentName" class="pill"></span></div>
       <div class="row">
-        <button id="undoBtn" class="ghost">アンドゥ</button>
-        <button id="newGameBtn" class="ghost" title="終了後に使用">新しいゲーム（先攻ローテ）</button>
-        <button id="resetBtn" class="warn">リセット</button>
+        <button id="undoBtn" class="btn-alt">戻る</button>
+        <button id="newGameBtn" class="btn-alt" title="終了後に使用">新しいゲーム（先攻ローテ）</button>
+        <button id="resetBtn" class="warn">試合やり直し</button>
       </div>
     </div>
 
@@ -130,7 +146,7 @@
       </table>
     </div>
 
-    <!-- 入力 -->
+    <!-- 入力（コンパクト） -->
     <div>
       <h3 style="margin:8px 0">入力</h3>
       <div class="row"><span class="badge">単品（その番号が得点）</span></div>
@@ -139,7 +155,7 @@
       <div class="grid" id="multiRow"></div>
       <div class="row" style="margin-top:8px">
         <button id="missBtn">ミス（0）</button>
-        <button id="shareBtn" class="ghost">結果コピー</button>
+        <button id="shareBtn" class="btn-alt">結果コピー</button>
       </div>
     </div>
 
@@ -159,12 +175,24 @@
         <div class="note">端末内データのみ（localStorage）。JSON/CSVでエクスポート可。</div>
       </div>
       <div class="row">
-        <button id="exportJSON" class="ghost">JSONエクスポート</button>
-        <button id="exportCSV" class="ghost">CSVエクスポート</button>
+        <button id="exportJSON" class="btn-alt">JSONエクスポート</button>
+        <button id="exportCSV" class="btn-alt">CSVエクスポート</button>
         <button id="closeAnalytics" class="primary">閉じる</button>
       </div>
     </div>
     <div id="analyticsBody" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- 勝利時のカスタム確認モーダル -->
+<div class="askBG" id="askBG">
+  <div class="ask">
+    <h3 id="askTitle">勝利</h3>
+    <div id="askMsg" class="muted" style="margin-bottom:12px"></div>
+    <div class="row">
+      <button id="askCancel" class="btn-alt">試合終了</button>
+      <button id="askOk" class="primary">試合続行</button>
+    </div>
   </div>
 </div>
 
@@ -202,19 +230,16 @@
   function save(){ localStorage.setItem('molkky-app', JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem('molkky-app')||'null'); }catch{ return null; } }
 
-  // ====== Setup UI（新しい縦並びレイアウト） ======
+  // ====== Setup UI（縦並びレイアウト） ======
   const playerList = $("#playerList");
   function renderSetup(){
     playerList.innerHTML='';
-
     state.players.forEach((p,i)=>{
       const row = el('div',{class:'player-row'});
 
-      // 並べ替えハンドル
       const handle = el('div',{class:'player-handle', title:'ドラッグで並び替え', text:'≡'});
       row.append(handle);
 
-      // 名前入力
       const input = el('input',{value:p.name, 'aria-label':'名前'});
       input.enterKeyHint = 'next';
       input.addEventListener('input', ()=>{
@@ -223,15 +248,14 @@
       });
       row.append(input);
 
-      // 削除
-      const delBtn = el('button',{class:'ghost player-del', text:'削除'});
+      const delBtn = el('button',{class:'player-del', text:'✕', title:'削除'});
       delBtn.addEventListener('click', ()=>{
         state.players.splice(i,1);
         renderSetup(); save();
       });
       row.append(delBtn);
 
-      // 並び替え（D&D）
+      // 並び替え
       row.draggable = true;
       row.addEventListener('dragstart', e=>{
         e.dataTransfer.setData('text/plain', i);
@@ -252,7 +276,6 @@
       playerList.append(row);
     });
 
-    // 初期プレイヤー（空ならA/B/C）
     if(state.players.length===0){
       ['A','B','C'].forEach(n=>addPlayer(n));
       renderSetup();
@@ -300,26 +323,19 @@
   }
 
   function renderBoard(){
-    // header
     scoreHead.innerHTML='<th>項目</th>'+state.players.map(p=>`<th>${escapeHtml(p.name)}</th>`).join('');
 
-    // score row
-    scoreRow.innerHTML='';
-    scoreRow.append(el('td',{text:'スコア'}));
+    scoreRow.innerHTML=''; scoreRow.append(el('td',{text:'スコア'}));
     state.players.forEach(p=>{ scoreRow.append(el('td',{text:String(p.score)})); });
 
-    // remain row（残点）
-    remainRow.innerHTML='';
-    remainRow.append(el('td',{text:'残'}));
+    remainRow.innerHTML=''; remainRow.append(el('td',{text:'残'}));
     state.players.forEach(p=>{
       const r = Math.max(0, 50 - p.score);
       const t = p.score>=50 ? '—' : `${r}`;
       remainRow.append(el('td',{html:`<span class="pill">${t}</span>`}));
     });
 
-    // status row（ミス数/失格/勝者）
-    statusRow.innerHTML='';
-    statusRow.append(el('td',{text:'状態'}));
+    statusRow.innerHTML=''; statusRow.append(el('td',{text:'状態'}));
     state.players.forEach(p=>{
       let s = '&nbsp;';
       if(p.score===50) s = '<span class="pill winner">勝者</span>';
@@ -328,7 +344,6 @@
       statusRow.append(el('td',{html:s}));
     });
 
-    // current highlight
     const cid = currentId();
     const name = cid ? playerById(cid).name : '-';
     $("#currentName").textContent = name;
@@ -336,11 +351,9 @@
       th.classList.toggle('current', cid && i===state.players.findIndex(p=>p.id===cid)+1);
     });
 
-    // winner box & new game button enable
     renderWinnerBox();
     $("#newGameBtn").disabled = !state.finished;
 
-    // keypads & history
     renderKeypads();
     renderHistory();
     save();
@@ -364,7 +377,7 @@
   $("#missBtn").addEventListener('click', ()=>applyPlay({type:'miss',value:0}));
   $("#undoBtn").addEventListener('click', undo);
   $("#resetBtn").addEventListener('click', ()=>{
-    if(confirm('現在の試合をリセットしますか？')){ state = initState(); save(); location.reload(); }
+    if(confirm('試合を最初からやり直しますか？')){ state = initState(); save(); location.reload(); }
   });
   $("#shareBtn").addEventListener('click', ()=>{
     const txt = exportText();
@@ -394,7 +407,20 @@
     renderBoard();
   }
 
-  function applyPlay({type,value}){
+  // ====== 勝利時：カスタム選択（試合続行 / 試合終了） ======
+  function askContinue(msg){
+    return new Promise((resolve)=>{
+      const bg = $("#askBG"); const ok=$("#askOk"); const cancel=$("#askCancel");
+      $("#askTitle").textContent = "勝利";
+      $("#askMsg").innerHTML = msg.replace(/\n/g,'<br>');
+      bg.style.display='flex';
+      const clean = ()=>{ ok.onclick=null; cancel.onclick=null; bg.style.display='none'; };
+      ok.onclick = ()=>{ clean(); resolve(true); };
+      cancel.onclick = ()=>{ clean(); resolve(false); };
+    });
+  }
+
+  async function applyPlay({type,value}){
     if(state.finished) return;
     const cid = currentId(); if(!cid) return;
     const p = playerById(cid);
@@ -409,17 +435,16 @@
     }else{
       p.misses = 0; gained = value; p.score += gained;
       if(p.score===50){
-        toast(`${p.name} が50点！`); 
-        p.out = true; 
+        toast(`${p.name} が50点！`);
+        p.out = true;
         state.history.push({pid:cid,type, value:gained,prev,ts});
+
         const remaining = aliveOrder().length;
         if(remaining>=2){
-          const cont = confirm(`${p.name} が勝利しました。\n残りのプレイヤーで続行しますか？\nOK: 続行 / キャンセル: 終了`);
+          const cont = await askContinue(`${p.name} が勝利しました。<br>残りのプレイヤーで続けますか？`);
           if(cont){
             state.players.forEach(pp=>{ if(!pp.out) pp.misses=0; });
-            advanceTurn();
-            renderBoard();
-            return;
+            advanceTurn(); renderBoard(); return;
           } else {
             state.finished = true;
           }
@@ -435,13 +460,9 @@
       }
     }
 
-    // ターン進行
     advanceTurn();
     if(aliveOrder().length===0){ state.finished=true; }
-
-    // ゲーム終了時はDBへ保存
     if(state.finished){ persistGame(); }
-
     renderBoard();
   }
 
@@ -571,7 +592,7 @@
       return;
     }
 
-    // 1) 概要: 試合数 / 累積ターン / 平均ターン秒数
+    // 概要
     const allPlays = db.games.reduce((acc,g)=>acc+g.plays.length,0);
     const totalDurationMs = db.games.reduce((acc,g)=>acc+(g.endedAt-g.startedAt),0);
     const avgSecPerTurn = allPlays? (totalDurationMs/1000/allPlays):0;
@@ -581,8 +602,8 @@
     head.append(el('div',{class:'chip',html:`平均/投擲 <b>${avgSecPerTurn.toFixed(1)}s</b>`}));
     host.appendChild(head);
 
-    // 2) プレイヤー集計
-    const stat = new Map(); // name -> stats
+    // プレイヤー集計
+    const stat = new Map();
     const firstIdOfGame = g=> g.order[0];
     db.games.forEach(g=>{
       const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
@@ -650,14 +671,12 @@
     });
     host.appendChild(table);
 
-    // 3) グローバル最大得点ターン
     let globalMax = {v:0, name:'-', ts:null, game:null};
     stat.forEach((s,name)=>{ if(s.maxTurn.v>globalMax.v){ globalMax = {v:s.maxTurn.v, name, ts:s.maxTurn.ts, game:s.maxTurn.game}; } });
     const gl = el('div',{class:'row', style:'margin:10px 0'});
     gl.append(el('div',{class:'chip', html:`最大得点ターン <b>${globalMax.v}</b> by <b>${escapeHtml(globalMax.name)}</b>`}));
     host.appendChild(gl);
 
-    // 4) 単品ヒートマップ（1-12）
     const heatWrap = el('div', {style:'margin-top:10px'});
     heatWrap.append(el('h3',{text:'単品ヒートマップ（1-12）'}));
     const maxCount = Array.from(stat.values()).reduce((m,s)=>Math.max(m, ...(s.heat||[0])),0) || 1;
@@ -674,7 +693,6 @@
     });
     host.appendChild(heatWrap);
 
-    // 5) ゲーム所要時間一覧
     const gTable = document.createElement('table');
     gTable.innerHTML = `<thead><tr><th>GameID</th><th>開始</th><th>終了</th><th>所要時間</th><th>投擲数</th><th>平均/投擲(秒)</th></tr></thead><tbody></tbody>`;
     const gtb = gTable.querySelector('tbody');
@@ -691,7 +709,7 @@
   function fmt(ts){ const d=new Date(ts); return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; }
   function secs(ms){ const s=Math.round(ms/1000); const m=Math.floor(s/60); const r=s%60; return `${m}分${r}秒`; }
 
-  // ====== boot ======
+  // 起動
   renderSetup(); if(state.players.length && state.order.length){ switchToBoard(); renderBoard(); }
 })();
 </script>
