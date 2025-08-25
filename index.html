@@ -24,7 +24,21 @@
   .container{max-width:1080px;margin:0 auto;padding:16px}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .card{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(2,8,23,.06);padding:14px}
-  .players{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+
+  /* ==== プレイヤー設定を縦並びの行に（スマホで崩れない） ==== */
+  .players{display:flex;flex-direction:column;gap:10px}
+  .player-row{
+    display:flex;align-items:center;gap:10px;padding:10px;
+    background:var(--card);border:1px solid #e5e7eb;border-radius:12px;
+  }
+  .player-handle{
+    width:34px;height:34px;border-radius:10px;border:1px solid #e5e7eb;
+    display:flex;align-items:center;justify-content:center;background:#fff;
+    font-size:18px;user-select:none;cursor:grab
+  }
+  .player-row input{flex:1;min-height:42px;font-size:16px}
+  .player-del{min-height:42px}
+
   input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
   button{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer}
   button.primary{border-color:var(--acc);color:#fff;background:var(--acc)}
@@ -52,7 +66,6 @@
   .note{font-size:12px;color:#64748b}
   .grid-heat{display:grid;grid-template-columns:repeat(6,minmax(40px,1fr));gap:6px}
   .cell{border:1px solid #e5e7eb;border-radius:8px;padding:6px}
-  /* mobile tweak */
   @media (max-width: 640px){
     body{font-size:16px}
     .head-inner{padding:8px 12px}
@@ -60,8 +73,8 @@
     button{min-height:44px;font-size:16px}
     input{min-height:42px;font-size:16px}
     .grid{grid-template-columns:repeat(3,1fr)}
-    .players{grid-template-columns:1fr auto auto}
     .modal{width:100%;max-width:none;height:100svh;max-height:none;border-radius:0;padding:12px}
+    .player-row{padding:8px}
   }
   .tableWrap{overflow-x:auto}
 </style>
@@ -117,7 +130,7 @@
       </table>
     </div>
 
-    <!-- 入力（固定なし・通常スクロール） -->
+    <!-- 入力 -->
     <div>
       <h3 style="margin:8px 0">入力</h3>
       <div class="row"><span class="badge">単品（その番号が得点）</span></div>
@@ -189,14 +202,42 @@
   function save(){ localStorage.setItem('molkky-app', JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem('molkky-app')||'null'); }catch{ return null; } }
 
-  // ====== Setup UI ======
+  // ====== Setup UI（新しい縦並びレイアウト） ======
   const playerList = $("#playerList");
   function renderSetup(){
     playerList.innerHTML='';
+
     state.players.forEach((p,i)=>{
-      const row = el('div',{class:'row',style:'gap:8px'});
+      const row = el('div',{class:'player-row'});
+
+      // 並べ替えハンドル
+      const handle = el('div',{class:'player-handle', title:'ドラッグで並び替え', text:'≡'});
+      row.append(handle);
+
+      // 名前入力
+      const input = el('input',{value:p.name, 'aria-label':'名前'});
+      input.enterKeyHint = 'next';
+      input.addEventListener('input', ()=>{
+        p.name = input.value.trim().slice(0,20)||`P${i+1}`;
+        save();
+      });
+      row.append(input);
+
+      // 削除
+      const delBtn = el('button',{class:'ghost player-del', text:'削除'});
+      delBtn.addEventListener('click', ()=>{
+        state.players.splice(i,1);
+        renderSetup(); save();
+      });
+      row.append(delBtn);
+
+      // 並び替え（D&D）
       row.draggable = true;
-      row.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', i); });
+      row.addEventListener('dragstart', e=>{
+        e.dataTransfer.setData('text/plain', i);
+        row.style.opacity = .6;
+      });
+      row.addEventListener('dragend', ()=>{ row.style.opacity = 1; });
       row.addEventListener('dragover', e=>e.preventDefault());
       row.addEventListener('drop', e=>{
         e.preventDefault();
@@ -208,21 +249,13 @@
         renderSetup(); save();
       });
 
-      const input = el('input',{value:p.name, 'aria-label':'名前'});
-      input.addEventListener('input', ()=>{
-        p.name = input.value.trim().slice(0,20)||`P${i+1}`;
-        save();
-      });
-      const delBtn = el('button',{text:'削除',class:'ghost'});
-      delBtn.addEventListener('click', ()=>{
-        state.players.splice(i,1);
-        renderSetup(); save();
-      });
-      row.append(input, el('span',{class:'muted',text:`初期: 0点`}), delBtn);
       playerList.append(row);
     });
+
+    // 初期プレイヤー（空ならA/B/C）
     if(state.players.length===0){
       ['A','B','C'].forEach(n=>addPlayer(n));
+      renderSetup();
     }
   }
   function addPlayer(name){
