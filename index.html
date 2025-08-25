@@ -25,7 +25,7 @@
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .card{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(2,8,23,.06);padding:14px}
 
-  /* ==== プレイヤー設定：さらに見やすく ==== */
+  /* プレイヤー設定（見やすい縦並び） */
   .players{display:flex;flex-direction:column;gap:10px}
   .player-row{
     display:flex;align-items:center;gap:10px;padding:10px;
@@ -37,9 +37,15 @@
     font-size:18px;user-select:none;cursor:grab;flex:0 0 34px;
   }
   .player-row input{flex:1;min-height:42px;font-size:16px}
-  .player-del{
-    width:42px;height:42px;border-radius:10px;font-size:18px;line-height:1;cursor:pointer;
+  .player-del{width:42px;height:42px;border-radius:10px;font-size:18px;line-height:1;cursor:pointer}
+
+  /* 最近のプレイヤー名チップ */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip-btn{
+    border:1px solid #cfe7fb;background:#eef6ff;color:#0f172a;
+    border-radius:999px;padding:6px 10px;font-size:14px;cursor:pointer;
   }
+  .chip-btn:active{transform:translateY(1px)}
 
   input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
   button{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer}
@@ -70,7 +76,7 @@
   .grid-heat{display:grid;grid-template-columns:repeat(6,minmax(40px,1fr));gap:6px}
   .cell{border:1px solid #e5e7eb;border-radius:8px;padding:6px}
 
-  /* ====== コンパクトUI（スマホ） ====== */
+  /* コンパクトUI（スマホ） */
   @media (max-width: 640px){
     body{font-size:15px}
     .head-inner{padding:8px 12px}
@@ -88,7 +94,7 @@
 
   .tableWrap{overflow-x:auto}
 
-  /* ==== 勝利時カスタムモーダル ==== */
+  /* 勝利時カスタムモーダル（試合続行／試合終了） */
   .askBG{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
   .ask{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   .ask h3{margin:0 0 8px}
@@ -115,7 +121,12 @@
   <!-- セットアップ -->
   <section class="card" id="setup">
     <h2 style="margin:0 0 8px">プレイヤー</h2>
+
     <div id="playerList" class="players"></div>
+
+    <!-- 最近のプレイヤー名チップ -->
+    <div id="nameHistory" style="margin-top:8px"></div>
+
     <div class="row" style="margin-top:8px">
       <button id="addPlayerBtn">＋ プレイヤー追加</button>
       <button id="shuffleBtn" class="btn-alt">先攻シャッフル</button>
@@ -206,6 +217,34 @@
   const saveDB = (db) => localStorage.setItem(DB_KEY, JSON.stringify(db));
   const appendGame = (game) => { const db=loadDB(); db.games.push(game); saveDB(db); };
 
+  // ====== 名前履歴（localStorage） ======
+  const NAME_KEY = 'yanamol-name-history';
+  function loadNames(){ try{ return JSON.parse(localStorage.getItem(NAME_KEY) || '[]'); }catch{ return []; } }
+  function saveNames(arr){ localStorage.setItem(NAME_KEY, JSON.stringify(arr)); }
+  function rememberName(name){
+    name = String(name||'').trim();
+    if(!name) return;
+    const arr = loadNames().filter(n => n !== name);
+    arr.unshift(name);
+    saveNames(arr.slice(0,12));
+    renderNameHistory();
+  }
+  function renderNameHistory(){
+    const box = $("#nameHistory");
+    const names = loadNames();
+    if(!names.length){ box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="muted" style="margin:4px 0 6px">最近のプレイヤー</div>`;
+    const wrap = el('div',{class:'chips'});
+    names.forEach(n=>{
+      const b = el('button',{class:'chip-btn', text:n, title:`${n} を追加`});
+      b.addEventListener('click', ()=>{
+        addPlayer(n); renderSetup(); save();
+      });
+      wrap.appendChild(b);
+    });
+    box.appendChild(wrap);
+  }
+
   // ====== ゲーム進行のstate ======
   const initState = () => ({
     players: [], // {id,name,score,misses,out,overResets}
@@ -230,7 +269,7 @@
   function save(){ localStorage.setItem('molkky-app', JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem('molkky-app')||'null'); }catch{ return null; } }
 
-  // ====== Setup UI（縦並びレイアウト） ======
+  // ====== Setup UI（縦並び） ======
   const playerList = $("#playerList");
   function renderSetup(){
     playerList.innerHTML='';
@@ -246,6 +285,8 @@
         p.name = input.value.trim().slice(0,20)||`P${i+1}`;
         save();
       });
+      // 入力確定時に履歴へ
+      input.addEventListener('change', ()=>{ rememberName(input.value); });
       row.append(input);
 
       const delBtn = el('button',{class:'player-del', text:'✕', title:'削除'});
@@ -277,7 +318,13 @@
     });
 
     if(state.players.length===0){
-      ['A','B','C'].forEach(n=>addPlayer(n));
+      // 初回は直近履歴があればそれを提示、なければA/B/Cを仮置き
+      const names = loadNames();
+      if(names.length){
+        names.slice(0,3).forEach(n=>addPlayer(n));
+      }else{
+        ['A','B','C'].forEach(n=>addPlayer(n));
+      }
       renderSetup();
     }
   }
@@ -297,9 +344,16 @@
   $("#startBtn").addEventListener('click', ()=>{
     state.players = state.players.filter(p=>p.name.trim()!=='');
     if(state.players.length<2){ toast('2人以上で開始してください'); return; }
+    // 名前を履歴へ反映
+    state.players.forEach(p => rememberName(p.name));
+
     state.order = state.players.map(p=>p.id);
     state.turnIdx = 0; state.history=[]; state.finished=false;
     state.players.forEach(p=>{ p.score=0; p.misses=0; p.out=false; p.overResets=0; });
+
+    // 表示順を order に合わせて統一
+    applyOrderToPlayers();
+
     save(); switchToBoard();
   });
 
@@ -324,7 +378,6 @@
 
   function renderBoard(){
     scoreHead.innerHTML='<th>項目</th>'+state.players.map(p=>`<th>${escapeHtml(p.name)}</th>`).join('');
-
     scoreRow.innerHTML=''; scoreRow.append(el('td',{text:'スコア'}));
     state.players.forEach(p=>{ scoreRow.append(el('td',{text:String(p.score)})); });
 
@@ -390,14 +443,23 @@
     rotateFirst(); startNewGame();
   });
 
+  // ====== 並び関連 ======
   function rotateFirst(){
     if(state.order.length>1){
       const first = state.order.shift();
       state.order.push(first);
     }
   }
+  // orderの並びに players も揃える
+  function applyOrderToPlayers(){
+    const map = new Map(state.players.map(p => [p.id, p]));
+    state.players = state.order.map(id => map.get(id)).filter(Boolean);
+  }
 
   function startNewGame(){
+    // 先攻ローテ後の order に合わせて列表示も変更
+    applyOrderToPlayers();
+
     state.players.forEach(p=>{ p.score=0; p.misses=0; p.out=false; p.overResets=0; });
     state.turnIdx = 0;
     state.history = [];
@@ -415,8 +477,8 @@
       $("#askMsg").innerHTML = msg.replace(/\n/g,'<br>');
       bg.style.display='flex';
       const clean = ()=>{ ok.onclick=null; cancel.onclick=null; bg.style.display='none'; };
-      ok.onclick = ()=>{ clean(); resolve(true); };
-      cancel.onclick = ()=>{ clean(); resolve(false); };
+      ok.onclick = ()=>{ clean(); resolve(true); };      // 試合続行
+      cancel.onclick = ()=>{ clean(); resolve(false); }; // 試合終了
     });
   }
 
@@ -592,7 +654,7 @@
       return;
     }
 
-    // 概要
+    // 1) 概要
     const allPlays = db.games.reduce((acc,g)=>acc+g.plays.length,0);
     const totalDurationMs = db.games.reduce((acc,g)=>acc+(g.endedAt-g.startedAt),0);
     const avgSecPerTurn = allPlays? (totalDurationMs/1000/allPlays):0;
@@ -602,34 +664,59 @@
     head.append(el('div',{class:'chip',html:`平均/投擲 <b>${avgSecPerTurn.toFixed(1)}s</b>`}));
     host.appendChild(head);
 
-    // プレイヤー集計
-    const stat = new Map();
+    // 2) プレイヤー集計（1投目平均を含む）
+    const stat = new Map(); // name -> stats
     const firstIdOfGame = g=> g.order[0];
     db.games.forEach(g=>{
       const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
-      const perPlayerMissStreak = new Map();
-      const perPlayerMaxStreak = new Map();
+      const perPlayerMissStreak = new Map(); const perPlayerMaxStreak = new Map();
+
       g.players.forEach(pl=>{
         const name = pl.name;
-        if(!stat.has(name)) stat.set(name,{games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0,over:0,firstThrows:0,firstPoints:0,lateThrows:0,latePoints:0, heat: Array(13).fill(0), maxTurn:{v:0, ts:null, game:g.gameId}, maxMissStreak:0});
+        if(!stat.has(name)) stat.set(name,{
+          games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0,over:0,
+          firstThrows:0,firstPoints:0,lateThrows:0,latePoints:0,
+          ftCount:0, ftPoints:0, // ★ 各ゲームのその人の1投目
+          heat: Array(13).fill(0),
+          maxTurn:{v:0, ts:null, game:g.gameId},
+          maxMissStreak:0
+        });
         perPlayerMissStreak.set(pl.id,0); perPlayerMaxStreak.set(pl.id,0);
       });
+
+      const seenFirstThrow = new Set(); // このゲームでそのプレイヤーが初めて投げたか
       g.plays.forEach(p=>{
         const name = nameById[p.pid] || p.pid; const s = stat.get(name);
-        s.throws += 1; const isFirst = (p.pid === firstIdOfGame(g)); if(isFirst) s.firstThrows += 1; else s.lateThrows += 1;
-        if(p.type==='miss'){ s.miss += 1; const cur = (perPlayerMissStreak.get(p.pid)||0)+1; perPlayerMissStreak.set(p.pid,cur); perPlayerMaxStreak.set(p.pid, Math.max(perPlayerMaxStreak.get(p.pid)||0, cur)); }
-        else {
+        s.throws += 1;
+        const addForAvg = (p.type==='miss') ? 0 : (p.value||0);
+
+        if(!seenFirstThrow.has(p.pid)){
+          s.ftCount += 1; s.ftPoints += addForAvg; seenFirstThrow.add(p.pid);
+        }
+
+        const isFirst = (p.pid === firstIdOfGame(g));
+        if(isFirst){ s.firstThrows += 1; s.firstPoints += addForAvg; }
+        else       { s.lateThrows  += 1; s.latePoints  += addForAvg; }
+
+        if(p.type==='miss'){
+          s.miss += 1;
+          const cur = (perPlayerMissStreak.get(p.pid)||0)+1;
+          perPlayerMissStreak.set(p.pid,cur);
+          perPlayerMaxStreak.set(p.pid, Math.max(perPlayerMaxStreak.get(p.pid)||0, cur));
+        }else{
           perPlayerMissStreak.set(p.pid,0);
-          const add = p.value||0; s.points += add; if(isFirst) s.firstPoints += add; else s.latePoints += add;
+          s.points += addForAvg;
           if(p.type==='single'){ s.single += 1; if(p.value>=1 && p.value<=12) s.heat[p.value] += 1; }
           else if(p.type==='multi'){ s.multi += 1; }
           else if(p.type==='over'){ s.over += 1; }
-          if(add > s.maxTurn.v){ s.maxTurn = {v:add, ts:p.ts, game:g.gameId}; }
+          if(addForAvg > s.maxTurn.v){ s.maxTurn = {v:addForAvg, ts:p.ts, game:g.gameId}; }
         }
       });
+
       g.players.forEach(pl=>{ const name = pl.name; stat.get(name).games += 1; });
-      g.winners.forEach(pid=>{ const name = nameById[pid] || pid; stat.get(name).wins += 1; });
-      perPlayerMaxStreak.forEach((v,pid)=>{ const name = nameById[pid] || pid; stat.get(name).maxMissStreak = Math.max(stat.get(name).maxMissStreak||0, v); });
+      const nameByIdWin = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
+      g.winners.forEach(pid=>{ const name = nameByIdWin[pid] || pid; stat.get(name).wins += 1; });
+      perPlayerMaxStreak.forEach((v,pid)=>{ const nm = nameByIdWin[pid] || pid; stat.get(nm).maxMissStreak = Math.max(stat.get(nm).maxMissStreak||0, v); });
     });
 
     const table = document.createElement('table');
@@ -638,7 +725,8 @@
         <tr>
           <th>プレイヤー</th><th>試合</th><th>勝</th><th>投擲</th>
           <th>総得点</th><th>平均/投擲</th><th>ミス率</th>
-          <th>先攻 平均/投擲</th><th>後攻 平均/投擲</th>
+          <th>先攻 平均/投</th><th>後攻 平均/投</th>
+          <th>1投目 平均</th>
           <th>最大得点ターン</th><th>最長ミス連鎖</th>
         </tr>
       </thead>
@@ -647,7 +735,12 @@
 
     let maxAvg = 0; stat.forEach(s=>{ const avg = s.throws? (s.points/s.throws):0; if(avg>maxAvg) maxAvg=avg; });
     stat.forEach((s,name)=>{
-      const avg = s.throws? (s.points/s.throws):0; const missRate = s.throws? (s.miss/s.throws*100):0; const firstAvg = s.firstThrows? (s.firstPoints/s.firstThrows):0; const lateAvg = s.lateThrows? (s.latePoints/s.lateThrows):0;
+      const avg = s.throws? (s.points/s.throws):0;
+      const missRate = s.throws? (s.miss/s.throws*100):0;
+      const firstAvg = s.firstThrows? (s.firstPoints/s.firstThrows):0;
+      const lateAvg  = s.lateThrows ? (s.latePoints /s.lateThrows ):0;
+      const ftAvg    = s.ftCount    ? (s.ftPoints   /s.ftCount    ):0; // ★ 1投目平均
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="text-align:left;font-weight:600">${escapeHtml(name)}</td>
@@ -665,18 +758,21 @@
         </td>
         <td>${firstAvg.toFixed(2)}</td>
         <td>${lateAvg.toFixed(2)}</td>
+        <td>${ftAvg.toFixed(2)} <span class="note">(${s.ftCount})</span></td>
         <td>${s.maxTurn.v||0}</td>
         <td>${s.maxMissStreak||0}</td>`;
       tbody.appendChild(tr);
     });
     host.appendChild(table);
 
+    // 3) 最大得点ターン
     let globalMax = {v:0, name:'-', ts:null, game:null};
     stat.forEach((s,name)=>{ if(s.maxTurn.v>globalMax.v){ globalMax = {v:s.maxTurn.v, name, ts:s.maxTurn.ts, game:s.maxTurn.game}; } });
     const gl = el('div',{class:'row', style:'margin:10px 0'});
     gl.append(el('div',{class:'chip', html:`最大得点ターン <b>${globalMax.v}</b> by <b>${escapeHtml(globalMax.name)}</b>`}));
     host.appendChild(gl);
 
+    // 4) 単品ヒートマップ
     const heatWrap = el('div', {style:'margin-top:10px'});
     heatWrap.append(el('h3',{text:'単品ヒートマップ（1-12）'}));
     const maxCount = Array.from(stat.values()).reduce((m,s)=>Math.max(m, ...(s.heat||[0])),0) || 1;
@@ -693,6 +789,7 @@
     });
     host.appendChild(heatWrap);
 
+    // 5) ゲーム所要時間一覧
     const gTable = document.createElement('table');
     gTable.innerHTML = `<thead><tr><th>GameID</th><th>開始</th><th>終了</th><th>所要時間</th><th>投擲数</th><th>平均/投擲(秒)</th></tr></thead><tbody></tbody>`;
     const gtb = gTable.querySelector('tbody');
@@ -710,7 +807,9 @@
   function secs(ms){ const s=Math.round(ms/1000); const m=Math.floor(s/60); const r=s%60; return `${m}分${r}秒`; }
 
   // 起動
-  renderSetup(); if(state.players.length && state.order.length){ switchToBoard(); renderBoard(); }
+  renderSetup();
+  renderNameHistory(); // 最近のプレイヤー候補
+  if(state.players.length && state.order.length){ switchToBoard(); renderBoard(); }
 })();
 </script>
 
