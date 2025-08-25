@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>やなモル</title>
+<style>
+  :root{
+    --bg:#f7fafc; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --acc:#0ea5e9; --acc2:#f59e0b; --ok:#10b981; --warn:#ef4444;
+  }
+  /* playful bg */
+  body{margin:0;background:radial-gradient(60px 60px at 20px 20px,#ffffff 20%,#f4f7fb 21% ,#f4f7fb 60%,#ffffff 61%) 0 0/36px 36px;
+       color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic UI",sans-serif}
+  header{position:sticky;top:0;background:linear-gradient(180deg,#fff,rgba(255,255,255,.85));backdrop-filter:saturate(1.2) blur(6px);
+    z-index:10;border-bottom:1px solid #e5e7eb}
+  .head-inner{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+  h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px}
+  .logo{width:28px;height:28px}
+  .container{max-width:1080px;margin:0 auto;padding:16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .card{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(2,8,23,.06);padding:14px}
+  .players{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+  input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
+  button{border:1px solid #e5e7eb;background:#fff;border-radius:12px;padding:10px 12px;font-size:14px;cursor:pointer}
+  button.primary{border-color:var(--acc);color:#fff;background:var(--acc)}
+  button.warn{border-color:var(--warn);background:var(--warn);color:#fff}
+  button.ghost{background:#fff}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .pill{padding:4px 8px;border-radius:999px;background:#e5e7eb;color:#111;font-size:12px}
+  .current{outline:2px solid var(--acc);border-radius:10px}
+  table{width:100%;border-collapse:collapse}
+  th,td{border-bottom:1px solid #e5e7eb;padding:8px;text-align:center;vertical-align:middle}
+  th{font-weight:600;background:#f3f4f6}
+  .muted{color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .badge{font-size:12px;border-radius:6px;background:#e5e7eb;padding:2px 6px}
+  .winner{background:var(--ok);color:#fff}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:#111;color:#fff;padding:8px 12px;border-radius:10px;opacity:0;transition:.2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .spacer{flex:1}
+  .btn-alt{border-color:#d1d5db}
+  /* modal */
+  .modalBG{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+  .modal{max-width:1040px;width:100%;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);padding:16px}
+  .bar{height:10px;border-radius:6px;background:#e5e7eb;overflow:hidden}
+  .bar > span{display:block;height:100%}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#eef6ff;border:1px solid #cfe7fb;font-size:12px}
+  .note{font-size:12px;color:#64748b}
+  .pin-fill{fill:#f3f4f6;stroke:#94a3b8;stroke-width:1.2}
+  .stick{fill:#f59e0b}
+  .sub{font-size:12px;color:#6b7280}
+  .grid-heat{display:grid;grid-template-columns:repeat(6,minmax(40px,1fr));gap:6px}
+  .cell{border:1px solid #e5e7eb;border-radius:8px;padding:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <!-- Simple inline SVG logo (pins + stick) -->
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+      <g>
+        <ellipse class="pin-fill" cx="20" cy="30" rx="6" ry="10"></ellipse>
+        <ellipse class="pin-fill" cx="34" cy="30" rx="6" ry="10"></ellipse>
+        <ellipse class="pin-fill" cx="27" cy="18" rx="6" ry="10"></ellipse>
+        <rect class="stick" x="6" y="44" width="44" height="6" rx="3"></rect>
+      </g>
+    </svg>
+    <h1>やなモル</h1>
+    <span class="chip">広告なし</span>
+    <div class="spacer"></div>
+    <button id="openAnalytics" class="btn-alt">分析</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- セットアップ -->
+  <section class="card" id="setup">
+    <h2 style="margin:0 0 8px">プレイヤー</h2>
+    <div id="playerList" class="players"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="addPlayerBtn">＋ プレイヤー追加</button>
+      <button id="shuffleBtn" class="ghost">先攻シャッフル</button>
+      <button id="startBtn" class="primary">ゲーム開始</button>
+      <span class="muted">ドラッグで並び替え可（先攻決め）</span>
+    </div>
+  </section>
+
+  <!-- スコアボード -->
+  <section class="card" id="board" style="display:none">
+    <div class="row" style="justify-content:space-between">
+      <div>現在の投擲: <span id="currentName" class="pill"></span></div>
+      <div class="row">
+        <button id="undoBtn" class="ghost">アンドゥ</button>
+        <button id="newGameBtn" class="ghost" title="終了後に使用">新しいゲーム（先攻ローテ）</button>
+        <button id="resetBtn" class="warn">リセット</button>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;margin-top:8px">
+      <table id="scoreTable">
+        <thead><tr id="scoreHead"></tr></thead>
+        <tbody>
+          <tr id="scoreRow"></tr>
+          <tr id="remainRow"></tr>
+          <tr id="statusRow"></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin:16px 0 8px">入力</h3>
+    <div class="row"><span class="badge">単品（その番号が得点）</span></div>
+    <div class="grid" id="singleRow"></div>
+    <div class="row" style="margin-top:8px"><span class="badge">複数（倒した本数が得点）</span></div>
+    <div class="grid" id="multiRow"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="missBtn">ミス（0）</button>
+      <button id="shareBtn" class="ghost">結果コピー</button>
+    </div>
+
+    <div id="winnerBox" style="margin-top:12px"></div>
+    <details style="margin-top:12px"><summary>履歴</summary>
+      <div id="historyBox" class="muted" style="white-space:pre-wrap"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 分析モーダル -->
+<div class="modalBG" id="analyticsBG" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="anltTitle">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2 id="anltTitle" style="margin:0">やなモル分析</h2>
+        <div class="sub">端末内データのみ（localStorage）。メニューからエクスポート可。</div>
+      </div>
+      <div class="row">
+        <button id="exportJSON" class="ghost">JSONエクスポート</button>
+        <button id="exportCSV" class="ghost">CSVエクスポート</button>
+        <button id="closeAnalytics" class="primary">閉じる</button>
+      </div>
+    </div>
+    <div id="analyticsBody" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // ====== DB（ローカル保存） ======
+  const DB_KEY = 'yanamol-db';
+  const loadDB = () => { try{ return JSON.parse(localStorage.getItem(DB_KEY)||'{"games":[]}'); }catch{ return {games:[]}; } };
+  const saveDB = (db) => localStorage.setItem(DB_KEY, JSON.stringify(db));
+  const appendGame = (game) => { const db=loadDB(); db.games.push(game); saveDB(db); };
+
+  // ====== ゲーム進行のstate ======
+  const initState = () => ({
+    players: [], // {id,name,score,misses,out,overResets}
+    order: [],   // player ids in order（先攻＝index0）
+    turnIdx: 0,
+    history: [], // {pid, type:'single'|'multi'|'miss'|'over', value, prev, ts}
+    finished: false,
+    gameNo: 1,
+    createdAt: Date.now(),
+    gameId: 'g_'+Math.random().toString(36).slice(2)
+  });
+  let state = load() || initState();
+
+  // ====== DOM helper ======
+  const $ = (sel)=>document.querySelector(sel);
+  const el = (tag,attrs={})=>{ const n=document.createElement(tag); Object.entries(attrs).forEach(([k,v])=>{
+    if(k==='text') n.textContent=v; else if(k==='html') n.innerHTML=v; else if(k==='class') n.className=v; else n.setAttribute(k,v);
+  }); return n; };
+  const toast=(msg)=>{ const t=$("#toast"); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); };
+
+  // ====== storage for current session ======
+  function save(){ localStorage.setItem('molkky-app', JSON.stringify(state)); }
+  function load(){ try{ return JSON.parse(localStorage.getItem('molkky-app')||'null'); }catch{ return null; } }
+
+  // ====== Setup UI ======
+  const playerList = $("#playerList");
+  function renderSetup(){
+    playerList.innerHTML='';
+    state.players.forEach((p,i)=>{
+      const row = el('div',{class:'row',style:'gap:8px'});
+      row.draggable = true;
+      row.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', i); });
+      row.addEventListener('dragover', e=>e.preventDefault());
+      row.addEventListener('drop', e=>{ e.preventDefault(); const from = +e.dataTransfer.getData('text/plain'); const to = i; if(from===to) return; const [moved] = state.players.splice(from,1); state.players.splice(to,0,moved); renderSetup(); save(); });
+
+      const input = el('input',{value:p.name, 'aria-label':'名前'});
+      input.addEventListener('input', ()=>{ p.name = input.value.trim().slice(0,20)||`P${i+1}`; save(); });
+      const delBtn = el('button',{text:'削除',class:'ghost'});
+      delBtn.addEventListener('click', ()=>{ state.players.splice(i,1); renderSetup(); save(); });
+      row.append(input, el('span',{class:'muted',text:`初期: 0点`}), delBtn);
+      playerList.append(row);
+    });
+    if(state.players.length===0){ ['A','B','C'].forEach(n=>addPlayer(n)); }
+  }
+  function addPlayer(name){ const id = self.crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()); state.players.push({id,name,score:0,misses:0,out:false,overResets:0}); }
+
+  $("#addPlayerBtn").addEventListener('click', ()=>{ addPlayer(`P${state.players.length+1}`); renderSetup(); save(); });
+  $("#shuffleBtn").addEventListener('click', ()=>{ for(let i=state.players.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [state.players[i],state.players[j]]=[state.players[j],state.players[i]]; } renderSetup(); toast('順番をシャッフルしました'); save(); });
+  $("#startBtn").addEventListener('click', ()=>{
+    state.players = state.players.filter(p=>p.name.trim()!=='');
+    if(state.players.length<2){ toast('2人以上で開始してください'); return; }
+    state.order = state.players.map(p=>p.id);
+    state.turnIdx = 0; state.history=[]; state.finished=false;
+    state.players.forEach(p=>{ p.score=0; p.misses=0; p.out=false; p.overResets=0; });
+    save(); switchToBoard();
+  });
+
+  // ====== Board UI ======
+  const scoreHead = $("#scoreHead");
+  const scoreRow = $("#scoreRow");
+  const remainRow = $("#remainRow");
+  const statusRow = $("#statusRow");
+
+  function switchToBoard(){ $("#setup").style.display='none'; $("#board").style.display=''; renderBoard(); }
+  function playerById(id){ return state.players.find(p=>p.id===id); }
+  function aliveOrder(){ return state.order.filter(id=>!playerById(id).out); }
+  function currentId(){ const alive = aliveOrder(); if(alive.length===0) return null; return alive[state.turnIdx % alive.length]; }
+
+  function renderBoard(){
+    // header
+    scoreHead.innerHTML='<th>項目</th>'+state.players.map(p=>`<th>${escapeHtml(p.name)}</th>`).join('');
+
+    // score row
+    scoreRow.innerHTML=''; scoreRow.append(el('td',{text:'スコア'})); state.players.forEach(p=>{ scoreRow.append(el('td',{text:String(p.score)})); });
+
+    // remain row（残点）
+    remainRow.innerHTML=''; remainRow.append(el('td',{text:'残'})); state.players.forEach(p=>{ const r = Math.max(0, 50 - p.score); const t = p.score>=50 ? '—' : `${r}`; remainRow.append(el('td',{html:`<span class="pill">${t}</span>`})); });
+
+    // status row（ミス数/失格/勝者）
+    statusRow.innerHTML=''; statusRow.append(el('td',{text:'状態'})); state.players.forEach(p=>{ let s = '&nbsp;'; if(p.score===50) s = '<span class="pill winner">勝者</span>'; else if(p.out) s = '<span class="pill">失格</span>'; else if(p.misses) s = `<span class="pill">ミス: ${p.misses}</span>`; statusRow.append(el('td',{html:s})); });
+
+    // current highlight
+    const cid = currentId(); const name = cid ? playerById(cid).name : '-'; $("#currentName").textContent = name; [...scoreHead.children].forEach((th,i)=>{ th.classList.toggle('current', cid && i===state.players.findIndex(p=>p.id===cid)+1); });
+
+    // winner box & new game button enable
+    renderWinnerBox(); $("#newGameBtn").disabled = !state.finished;
+
+    // keypads & history
+    renderKeypads(); renderHistory(); save();
+  }
+
+  function renderKeypads(){
+    const single = $("#singleRow"), multi=$("#multiRow"); single.innerHTML=''; multi.innerHTML='';
+    for(let n=1;n<=12;n++){ const b = el('button',{text:String(n)}); b.addEventListener('click', ()=>applyPlay({type:'single',value:n})); single.append(b); }
+    for(let n=2;n<=12;n++){ const b = el('button',{text:`${n}本`}); b.addEventListener('click', ()=>applyPlay({type:'multi',value:n})); multi.append(b); }
+  }
+
+  $("#missBtn").addEventListener('click', ()=>applyPlay({type:'miss',value:0}));
+  $("#undoBtn").addEventListener('click', undo);
+  $("#resetBtn").addEventListener('click', ()=>{ if(confirm('現在の試合をリセットしますか？')){ state = initState(); save(); location.reload(); } });
+  $("#shareBtn").addEventListener('click', ()=>{ const txt = exportText(); navigator.clipboard?.writeText(txt).then(()=>toast('結果をコピーしました')).catch(()=>{ const ta = el('textarea'); ta.value = txt; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('結果をコピーしました'); }); });
+  $("#newGameBtn").addEventListener('click', ()=>{ if(!state.finished && !confirm('進行中ですが新しいゲームを開始しますか？')) return; rotateFirst(); startNewGame(); });
+
+  function rotateFirst(){ if(state.order.length>1){ const first = state.order.shift(); state.order.push(first); } }
+
+  function startNewGame(){ state.players.forEach(p=>{ p.score=0; p.misses=0; p.out=false; p.overResets=0; }); state.turnIdx = 0; state.history = []; state.finished = false; state.gameNo += 1; toast(`ゲーム ${state.gameNo} を開始（先攻ローテ適用）`); renderBoard(); }
+
+  function applyPlay({type,value}){
+    if(state.finished) return; const cid = currentId(); if(!cid) return; const p = playerById(cid); const prev = {score:p.score,misses:p.misses,out:p.out,overResets:p.overResets}; const ts = Date.now(); let gained = 0;
+
+    if(type==='miss'){
+      p.misses += 1; if(p.misses>=3){ p.out = true; toast(`${p.name} は3回ミスで失格`); }
+      state.history.push({pid:cid,type:'miss',value:0,prev,ts});
+    }else{
+      p.misses = 0; gained = value; p.score += gained;
+      if(p.score===50){
+        toast(`${p.name} が50点！`); p.out = true; state.history.push({pid:cid,type, value:gained,prev,ts});
+        const remaining = aliveOrder().length; if(remaining>=2){ const cont = confirm(`${p.name} が勝利しました。\n残りのプレイヤーで続行しますか？\nOK: 続行 / キャンセル: 終了`); if(cont){ state.players.forEach(pp=>{ if(!pp.out) pp.misses=0; }); advanceTurn(); renderBoard(); return; } else { state.finished = true; } } else { state.finished = true; }
+      } else if(p.score>50){ p.score = 25; p.overResets += 1; toast(`${p.name} はオーバー！25点へ`); state.history.push({pid:cid,type:'over', value:gained,prev,ts}); }
+      else { state.history.push({pid:cid,type, value:gained,prev,ts}); }
+    }
+
+    // ターン進行
+    advanceTurn(); if(aliveOrder().length===0){ state.finished=true; }
+
+    // ゲーム終了時はDBへ保存
+    if(state.finished){ persistGame(); }
+
+    renderBoard();
+  }
+
+  function advanceTurn(){ const alive = aliveOrder(); if(alive.length===0){ state.turnIdx = 0; return; } state.turnIdx = (state.turnIdx + 1) % alive.length; }
+
+  function undo(){ const h = state.history.pop(); if(!h) return; const aliveNow = aliveOrder(); if(aliveNow.length>0){ state.turnIdx = (state.turnIdx - 1 + aliveNow.length) % aliveNow.length; } else { state.turnIdx = 0; } const p = playerById(h.pid); p.score = h.prev.score; p.misses = h.prev.misses; p.out = h.prev.out; p.overResets = h.prev.overResets; state.finished = false; renderBoard(); }
+
+  function exportText(){ const lines = []; lines.push(`【やなモル 結果】（Game ${state.gameNo})`); state.players.forEach(p=>{ const status = p.out && p.score<50 ? '（失格）' : (p.score===50?'（勝者）':''); lines.push(`${p.name}: ${p.score}点 ${status}`); }); lines.push('— 記録 —'); state.history.forEach((h,i)=>{ const p = playerById(h.pid); const t = h.type==='miss'?'ミス':(h.type==='single'?`単品${h.value}`:h.type==='over'?`オーバー(${h.value})→25`:`複数${h.value}本`); lines.push(`${i+1}. ${p.name} → ${t}`); }); return lines.join('\n'); }
+
+  function renderHistory(){ const box = $("#historyBox"); box.textContent = state.history.map((h,i)=>{ const p = playerById(h.pid); const t = h.type==='miss'?'ミス':(h.type==='single'?`単品${h.value}`:h.type==='over'?`オーバー(${h.value})→25`:`複数${h.value}本`); return `${String(i+1).padStart(2,' ')}. ${p.name} → ${t}`; }).join('\n'); }
+
+  function renderWinnerBox(){ const wb = $("#winnerBox"); const winners = state.players.filter(p=>p.score===50); if(winners.length){ const names = winners.map(p=>escapeHtml(p.name)).join('、'); const aliveCnt = aliveOrder().length; let html = `<div class="pill winner">勝者：${names} 🎉</div>`; if(!state.finished && aliveCnt>=2){ html += `<div class="muted" style="margin-top:6px">残りのプレイヤーで続行中</div>`; } if(state.finished){ html += `<div style="margin-top:8px"><button id="finishNewGameBtn" class="primary">新しいゲーム（先攻ローテ）</button></div>`; } wb.innerHTML = html; document.querySelector("#finishNewGameBtn")?.addEventListener('click', ()=>{ rotateFirst(); startNewGame(); }); } else { wb.innerHTML = ''; } }
+
+  function persistGame(){ const db = loadDB(); if(db.games.some(g=>g.gameId===state.gameId)) return; const players = state.players.map(p=>({id:p.id,name:p.name})); const winners = state.players.filter(p=>p.score===50).map(p=>p.id); const game = { gameId: state.gameId, startedAt: state.createdAt, endedAt: Date.now(), players, winners, order: state.order.slice(), plays: state.history.map(h=>({ ts: h.ts, pid: h.pid, type: h.type, value: h.value, scoreBefore: h.prev.score, missesBefore: h.prev.misses })) }; appendGame(game); toast('試合データを保存しました'); }
+
+  function escapeHtml(str){ return String(str).replace(/[&<>"']/g,s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[s])); }
+
+  // ====== 分析モーダル ======
+  $("#openAnalytics").addEventListener('click', ()=>{ renderAnalytics(); $("#analyticsBG").style.display='flex'; $("#analyticsBG").setAttribute('aria-hidden','false'); });
+  $("#closeAnalytics").addEventListener('click', ()=>{ $("#analyticsBG").style.display='none'; $("#analyticsBG").setAttribute('aria-hidden','true'); });
+
+  $("#exportJSON").addEventListener('click', ()=>{ const db = loadDB(); const blob = new Blob([JSON.stringify(db,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); download(url,'yanamol-data.json'); });
+  $("#exportCSV").addEventListener('click', ()=>{ const db = loadDB(); const rows = [['gameId','ts','player','type','value','scoreBefore','missesBefore']]; db.games.forEach(g=>{ const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name])); g.plays.forEach(p=>{ rows.push([g.gameId, new Date(p.ts).toISOString(), nameById[p.pid]||p.pid, p.type, p.value, p.scoreBefore, p.missesBefore]); }); }); const csv = rows.map(r=>r.map(x=>String(x).includes(',')?`"${String(x).replace(/"/g,'""')}"`:String(x)).join(',')).join('\n'); const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); download(url,'yanamol-data.csv'); });
+  function download(url, filename){ const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+
+  function renderAnalytics(){
+    const host = $("#analyticsBody"); host.innerHTML=''; const db = loadDB(); if(!db.games.length){ host.innerHTML = `<div class="muted">まだ保存された試合はありません。まずは1試合プレイしてみてください。</div>`; return; }
+
+    // 1) 概要: 試合数 / 累積ターン / 平均ターン秒数
+    const allPlays = db.games.reduce((acc,g)=>acc+g.plays.length,0);
+    const totalDurationMs = db.games.reduce((acc,g)=>acc+(g.endedAt-g.startedAt),0);
+    const avgSecPerTurn = allPlays? (totalDurationMs/1000/allPlays):0;
+    const head = el('div',{class:'row'});
+    head.append(el('div',{class:'chip',html:`総試合 <b>${db.games.length}</b>`}));
+    head.append(el('div',{class:'chip',html:`総投擲 <b>${allPlays}</b>`}));
+    head.append(el('div',{class:'chip',html:`平均/投擲 <b>${avgSecPerTurn.toFixed(1)}s</b>`}));
+    host.appendChild(head);
+
+    // 2) プレイヤー集計
+    const stat = new Map(); // name -> stats
+    const firstIdOfGame = g=> g.order[0];
+    db.games.forEach(g=>{
+      const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
+      const perPlayerMissStreak = new Map();
+      const perPlayerMaxStreak = new Map();
+      // init
+      g.players.forEach(pl=>{
+        const name = pl.name; if(!stat.has(name)) stat.set(name,{games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0,over:0,firstThrows:0,firstPoints:0,lateThrows:0,latePoints:0, heat: Array(13).fill(0), maxTurn:{v:0, ts:null, game:g.gameId}, maxMissStreak:0});
+        perPlayerMissStreak.set(pl.id,0); perPlayerMaxStreak.set(pl.id,0);
+      });
+      // plays
+      g.plays.forEach(p=>{
+        const name = nameById[p.pid] || p.pid; const s = stat.get(name);
+        s.throws += 1; const isFirst = (p.pid === firstIdOfGame(g)); if(isFirst) s.firstThrows += 1; else s.lateThrows += 1;
+        if(p.type==='miss'){ s.miss += 1; const cur = (perPlayerMissStreak.get(p.pid)||0)+1; perPlayerMissStreak.set(p.pid,cur); perPlayerMaxStreak.set(p.pid, Math.max(perPlayerMaxStreak.get(p.pid)||0, cur)); }
+        else {
+          // reset streak on non-miss
+          perPlayerMissStreak.set(p.pid,0);
+          const add = p.value||0; s.points += add; if(isFirst) s.firstPoints += add; else s.latePoints += add;
+          if(p.type==='single'){ s.single += 1; if(p.value>=1 && p.value<=12) s.heat[p.value] += 1; }
+          else if(p.type==='multi'){ s.multi += 1; }
+          else if(p.type==='over'){ s.over += 1; }
+          // max turn highlight
+          if(add > s.maxTurn.v){ s.maxTurn = {v:add, ts:p.ts, game:g.gameId}; }
+        }
+      });
+      // games / wins
+      g.players.forEach(pl=>{ const name = pl.name; stat.get(name).games += 1; });
+      g.winners.forEach(pid=>{ const name = nameById[pid] || pid; stat.get(name).wins += 1; });
+      // copy streaks to stat
+      perPlayerMaxStreak.forEach((v,pid)=>{ const name = nameById[pid] || pid; stat.get(name).maxMissStreak = Math.max(stat.get(name).maxMissStreak||0, v); });
+    });
+
+    // TBL: per player
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>プレイヤー</th><th>試合</th><th>勝</th><th>投擲</th>
+          <th>総得点</th><th>平均/投擲</th><th>ミス率</th>
+          <th>先攻 平均/投擲</th><th>後攻 平均/投擲</th>
+          <th>最大得点ターン</th><th>最長ミス連鎖</th>
+        </tr>
+      </thead>
+      <tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    let maxAvg = 0; stat.forEach(s=>{ const avg = s.throws? (s.points/s.throws):0; if(avg>maxAvg) maxAvg=avg; });
+    stat.forEach((s,name)=>{
+      const avg = s.throws? (s.points/s.throws):0; const missRate = s.throws? (s.miss/s.throws*100):0; const firstAvg = s.firstThrows? (s.firstPoints/s.firstThrows):0; const lateAvg = s.lateThrows? (s.latePoints/s.lateThrows):0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align:left;font-weight:600">${escapeHtml(name)}</td>
+        <td>${s.games}</td>
+        <td>${s.wins}</td>
+        <td>${s.throws}</td>
+        <td>${s.points}</td>
+        <td>
+          <div class="bar"><span style="width:${maxAvg? (avg/maxAvg*100):0}%; background:${avg>=4?'#10b981':'#60a5fa'}"></span></div>
+          <div class="note">${avg.toFixed(2)}</div>
+        </td>
+        <td>
+          <div class="bar"><span style="width:${missRate}%; background:#fda4af"></span></div>
+          <div class="note">${missRate.toFixed(1)}%</div>
+        </td>
+        <td>${firstAvg.toFixed(2)}</td>
+        <td>${lateAvg.toFixed(2)}</td>
+        <td>${s.maxTurn.v||0}</td>
+        <td>${s.maxMissStreak||0}</td>`;
+      tbody.appendChild(tr);
+    });
+    host.appendChild(table);
+
+    // 3) グローバル最大得点ターン
+    let globalMax = {v:0, name:'-', ts:null, game:null};
+    stat.forEach((s,name)=>{ if(s.maxTurn.v>globalMax.v){ globalMax = {v:s.maxTurn.v, name, ts:s.maxTurn.ts, game:s.maxTurn.game}; } });
+    const gl = el('div',{class:'row', style:'margin:10px 0'});
+    gl.append(el('div',{class:'chip', html:`最大得点ターン <b>${globalMax.v}</b> by <b>${escapeHtml(globalMax.name)}</b>`}));
+    host.appendChild(gl);
+
+    // 4) 単品ヒートマップ（プレイヤーごと）
+    const heatWrap = el('div', {style:'margin-top:10px'});
+    heatWrap.append(el('h3',{text:'単品ヒートマップ（1-12）'}));
+    const maxCount = Array.from(stat.values()).reduce((m,s)=>Math.max(m, ...(s.heat||[0])),0) || 1;
+    stat.forEach((s,name)=>{
+      const sec = el('div',{class:'card', style:'margin-top:6px'});
+      sec.append(el('div',{html:`<b>${escapeHtml(name)}</b>`}));
+      const grid = el('div',{class:'grid-heat'});
+      for(let n=1;n<=12;n++){
+        const c = s.heat[n]||0; const pct = Math.round((c/maxCount)*100);
+        const cell = el('div',{class:'cell', html:`<div>${n}</div><div class="note">${c}</div>`, style:`background:linear-gradient(0deg, rgba(14,165,233,0.${Math.min(9,Math.max(1,Math.ceil(pct/12)))}) ${pct}%, rgba(255,255,255,1) ${pct}%);`});
+        grid.append(cell);
+      }
+      sec.append(grid); heatWrap.append(sec);
+    });
+    host.appendChild(heatWrap);
+
+    // 5) ゲーム所要時間一覧
+    const gTable = document.createElement('table');
+    gTable.innerHTML = `<thead><tr><th>GameID</th><th>開始</th><th>終了</th><th>所要時間</th><th>投擲数</th><th>平均/投擲(秒)</th></tr></thead><tbody></tbody>`;
+    const gtb = gTable.querySelector('tbody');
+    db.games.forEach(g=>{
+      const dur = (g.endedAt - g.startedAt); const avg = g.plays.length? (dur/1000/g.plays.length):0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${g.gameId}</td><td>${fmt(g.startedAt)}</td><td>${fmt(g.endedAt)}</td><td>${secs(dur)}</td><td>${g.plays.length}</td><td>${avg.toFixed(1)}</td>`;
+      gtb.appendChild(tr);
+    });
+    host.appendChild(el('h3',{text:'ゲーム所要時間一覧'}));
+    host.appendChild(gTable);
+  }
+
+  function fmt(ts){ const d=new Date(ts); return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; }
+  function secs(ms){ const s=Math.round(ms/1000); const m=Math.floor(s/60); const r=s%60; return `${m}分${r}秒`; }
+
+  // ====== boot ======
+  renderSetup(); if(state.players.length && state.order.length){ switchToBoard(); renderBoard(); }
+})();
+</script>
+</body>
+</html>
