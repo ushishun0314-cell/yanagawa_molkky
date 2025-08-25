@@ -20,7 +20,7 @@
   header{position:sticky;top:0;background:#fff;z-index:10;border-bottom:1px solid #e5e7eb}
   .head-inner{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
   h1{font-size:18px;margin:0;display:flex;align-items:center;gap:8px}
-  .logo{width:28px;height:28px}
+  .logo{width:28px;height:28px;object-fit:cover;border-radius:6px}
   .container{max-width:1080px;margin:0 auto;padding:16px}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .card{background:var(--card);border-radius:16px;box-shadow:0 2px 10px rgba(2,8,23,.06);padding:14px}
@@ -94,7 +94,7 @@
 
   .tableWrap{overflow-x:auto}
 
-  /* 勝利時カスタムモーダル（試合続行／試合終了） */
+  /* 勝利時カスタムモーダル（続行／終了） */
   .askBG{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
   .ask{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   .ask h3{margin:0 0 8px}
@@ -104,14 +104,9 @@
 <body>
 <header>
   <div class="head-inner">
-    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
-      <ellipse fill="#f3f4f6" stroke="#94a3b8" stroke-width="1.2" cx="20" cy="30" rx="6" ry="10"></ellipse>
-      <ellipse fill="#f3f4f6" stroke="#94a3b8" stroke-width="1.2" cx="34" cy="30" rx="6" ry="10"></ellipse>
-      <ellipse fill="#f3f4f6" stroke="#94a3b8" stroke-width="1.2" cx="27" cy="18" rx="6" ry="10"></ellipse>
-      <rect fill="#f59e0b" x="6" y="44" width="44" height="6" rx="3"></rect>
-    </svg>
+    <!-- ▼ ヘッダーアイコンを画像に変更（icons/yanamol-hero.png を配置してください） -->
+    <img class="logo" src="icons/yanamol-hero.png" alt="やなモル">
     <h1>やなモル</h1>
-    <span class="chip">広告なし</span>
     <div class="spacer"></div>
     <button id="openAnalytics" class="btn-alt">分析</button>
   </div>
@@ -183,11 +178,12 @@
     <div class="row" style="justify-content:space-between">
       <div>
         <h2 id="anltTitle" style="margin:0">やなモル分析</h2>
-        <div class="note">端末内データのみ（localStorage）。JSON/CSVでエクスポート可。</div>
+        <div class="note">端末内データのみ（localStorage）。JSON/CSVでエクスポート可。日別サマリーCSVも出せます。</div>
       </div>
       <div class="row">
         <button id="exportJSON" class="btn-alt">JSONエクスポート</button>
         <button id="exportCSV" class="btn-alt">CSVエクスポート</button>
+        <button id="exportDailyCSV" class="btn-alt">日別サマリーCSV</button>
         <button id="closeAnalytics" class="primary">閉じる</button>
       </div>
     </div>
@@ -201,8 +197,8 @@
     <h3 id="askTitle">勝利</h3>
     <div id="askMsg" class="muted" style="margin-bottom:12px"></div>
     <div class="row">
-      <button id="askCancel" class="btn-alt">試合終了</button>
-      <button id="askOk" class="primary">試合続行</button>
+      <button id="askCancel" class="btn-alt">終了</button>
+      <button id="askOk" class="primary">続行</button>
     </div>
   </div>
 </div>
@@ -254,7 +250,7 @@
     finished: false,
     gameNo: 1,
     createdAt: Date.now(),
-    gameId: 'g_'+Math.random().toString(36).slice(2)
+    gameId: null // yymmdd_n で後から採番
   });
   let state = load() || initState();
 
@@ -318,7 +314,6 @@
     });
 
     if(state.players.length===0){
-      // 初回は直近履歴があればそれを提示、なければA/B/Cを仮置き
       const names = loadNames();
       if(names.length){
         names.slice(0,3).forEach(n=>addPlayer(n));
@@ -350,6 +345,9 @@
     state.order = state.players.map(p=>p.id);
     state.turnIdx = 0; state.history=[]; state.finished=false;
     state.players.forEach(p=>{ p.score=0; p.misses=0; p.out=false; p.overResets=0; });
+
+    // ゲーム採番（yymmdd_n）
+    assignGameIdIfNeeded();
 
     // 表示順を order に合わせて統一
     applyOrderToPlayers();
@@ -443,7 +441,7 @@
     rotateFirst(); startNewGame();
   });
 
-  // ====== 並び関連 ======
+  // ====== 並び & 採番関連 ======
   function rotateFirst(){
     if(state.order.length>1){
       const first = state.order.shift();
@@ -455,8 +453,28 @@
     const map = new Map(state.players.map(p => [p.id, p]));
     state.players = state.order.map(id => map.get(id)).filter(Boolean);
   }
+  // yymmdd_n 形式の gameId を採番
+  function assignGameIdIfNeeded(){
+    if(state.gameId) return;
+    const d = new Date(state.createdAt);
+    const pad2 = n=>String(n).padStart(2,'0');
+    const y = d.getFullYear()%100, m=pad2(d.getMonth()+1), day=pad2(d.getDate());
+    const ymd = `${pad2(y)}${m}${day}`;
+    const db = loadDB();
+    const todayGames = db.games.filter(g=>{
+      // 旧形式が混在しても yymmdd_ で始まるもののみ数える
+      return typeof g.gameId==='string' && g.gameId.startsWith(`${ymd}_`);
+    });
+    const n = todayGames.length + 1;
+    state.gameId = `${ymd}_${n}`;
+  }
 
   function startNewGame(){
+    // 新しいゲームの開始時刻に更新
+    state.createdAt = Date.now();
+    state.gameId = null;
+    assignGameIdIfNeeded();
+
     // 先攻ローテ後の order に合わせて列表示も変更
     applyOrderToPlayers();
 
@@ -469,7 +487,7 @@
     renderBoard();
   }
 
-  // ====== 勝利時：カスタム選択（試合続行 / 試合終了） ======
+  // ====== 勝利時：カスタム選択（続行 / 終了） ======
   function askContinue(msg){
     return new Promise((resolve)=>{
       const bg = $("#askBG"); const ok=$("#askOk"); const cancel=$("#askCancel");
@@ -477,8 +495,8 @@
       $("#askMsg").innerHTML = msg.replace(/\n/g,'<br>');
       bg.style.display='flex';
       const clean = ()=>{ ok.onclick=null; cancel.onclick=null; bg.style.display='none'; };
-      ok.onclick = ()=>{ clean(); resolve(true); };      // 試合続行
-      cancel.onclick = ()=>{ clean(); resolve(false); }; // 試合終了
+      ok.onclick = ()=>{ clean(); resolve(true); };      // 続行
+      cancel.onclick = ()=>{ clean(); resolve(false); }; // 終了
     });
   }
 
@@ -550,7 +568,7 @@
 
   function exportText(){
     const lines = [];
-    lines.push(`【やなモル 結果】（Game ${state.gameNo})`);
+    lines.push(`【やなモル 結果】（Game ${state.gameNo} / ID: ${state.gameId})`);
     state.players.forEach(p=>{
       const status = p.out && p.score<50 ? '（失格）' : (p.score===50?'（勝者）':'');
       lines.push(`${p.name}: ${p.score}点 ${status}`);
@@ -625,22 +643,73 @@
     $("#analyticsBG").style.display='none'; $("#analyticsBG").setAttribute('aria-hidden','true');
   });
 
+  // エクスポート（生データ）
   $("#exportJSON").addEventListener('click', ()=>{
     const db = loadDB(); const blob = new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
     const url = URL.createObjectURL(blob); download(url,'yanamol-data.json');
   });
   $("#exportCSV").addEventListener('click', ()=>{
     const db = loadDB();
-    const rows = [['gameId','ts','player','type','value','scoreBefore','missesBefore']];
+    const rows = [['gameId','ts','date','player','type','value','scoreBefore','missesBefore']];
     db.games.forEach(g=>{
+      const date = (new Date(g.startedAt)).toISOString().slice(0,10);
       const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
       g.plays.forEach(p=>{
-        rows.push([g.gameId, new Date(p.ts).toISOString(), nameById[p.pid]||p.pid, p.type, p.value, p.scoreBefore, p.missesBefore]);
+        rows.push([g.gameId, new Date(p.ts).toISOString(), date, nameById[p.pid]||p.pid, p.type, p.value, p.scoreBefore, p.missesBefore]);
       });
     });
     const csv = rows.map(r=>r.map(x=>String(x).includes(',')?`"${String(x).replace(/"/g,'""')}"`:String(x)).join(',')).join('\n');
     const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); download(url,'yanamol-data.csv');
   });
+  // エクスポート（日別サマリー）
+  $("#exportDailyCSV").addEventListener('click', ()=>{
+    const db = loadDB();
+    const sum = new Map(); // key=date|name -> stats
+    const getKey = (date,name)=>`${date}|${name}`;
+    db.games.forEach(g=>{
+      const date = (new Date(g.startedAt)).toISOString().slice(0,10);
+      const nameById = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
+      const gameWinners = new Set(g.winners);
+
+      // 初期化（ゲーム参加カウントに使う）
+      g.players.forEach(pl=>{
+        const name = pl.name;
+        const key = getKey(date,name);
+        if(!sum.has(key)) sum.set(key,{games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0});
+        sum.get(key).games += 1;
+        if(gameWinners.has(pl.id)) sum.get(key).wins += 1;
+      });
+
+      g.plays.forEach(p=>{
+        const name = nameById[p.pid] || p.pid;
+        const key = getKey(date,name);
+        if(!sum.has(key)) sum.set(key,{games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0});
+        sum.get(key).throws += 1;
+        if(p.type==='miss'){ sum.get(key).miss += 1; }
+        else{
+          const add = p.value||0; sum.get(key).points += add;
+          if(p.type==='single') sum.get(key).single += 1;
+          if(p.type==='multi')  sum.get(key).multi  += 1;
+        }
+      });
+    });
+
+    const rows = [['date','player','games','wins','win_rate(%)','throws','points','avg_per_throw','single(%)','multi(%)','miss(%)']];
+    sum.forEach((v,key)=>{
+      const [date,name] = key.split('|');
+      const denomScore = (v.single+v.multi)||1;
+      const winRate = v.games? (v.wins/v.games*100):0;
+      const avg = v.throws? (v.points/v.throws):0;
+      const singlePct = (v.single/denomScore*100);
+      const multiPct = (v.multi/denomScore*100);
+      const missPct = v.throws? (v.miss/v.throws*100):0;
+      rows.push([date,name,v.games,v.wins,winRate.toFixed(1),v.throws,v.points,avg.toFixed(2),singlePct.toFixed(1),multiPct.toFixed(1),missPct.toFixed(1)]);
+    });
+
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); download(url,'yanamol-daily-summary.csv');
+  });
+
   function download(url, filename){
     const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -664,7 +733,7 @@
     head.append(el('div',{class:'chip',html:`平均/投擲 <b>${avgSecPerTurn.toFixed(1)}s</b>`}));
     host.appendChild(head);
 
-    // 2) プレイヤー集計（1投目平均を含む）
+    // 2) プレイヤー集計（勝率・単品/複数比率）
     const stat = new Map(); // name -> stats
     const firstIdOfGame = g=> g.order[0];
     db.games.forEach(g=>{
@@ -676,15 +745,13 @@
         if(!stat.has(name)) stat.set(name,{
           games:0,wins:0,throws:0,points:0,miss:0,single:0,multi:0,over:0,
           firstThrows:0,firstPoints:0,lateThrows:0,latePoints:0,
-          ftCount:0, ftPoints:0, // ★ 各ゲームのその人の1投目
-          heat: Array(13).fill(0),
-          maxTurn:{v:0, ts:null, game:g.gameId},
-          maxMissStreak:0
+          ftCount:0, ftPoints:0, // 各ゲームの1投目
+          heat: Array(13).fill(0)
         });
         perPlayerMissStreak.set(pl.id,0); perPlayerMaxStreak.set(pl.id,0);
       });
 
-      const seenFirstThrow = new Set(); // このゲームでそのプレイヤーが初めて投げたか
+      const seenFirstThrow = new Set();
       g.plays.forEach(p=>{
         const name = nameById[p.pid] || p.pid; const s = stat.get(name);
         s.throws += 1;
@@ -700,34 +767,28 @@
 
         if(p.type==='miss'){
           s.miss += 1;
-          const cur = (perPlayerMissStreak.get(p.pid)||0)+1;
-          perPlayerMissStreak.set(p.pid,cur);
-          perPlayerMaxStreak.set(p.pid, Math.max(perPlayerMaxStreak.get(p.pid)||0, cur));
         }else{
-          perPlayerMissStreak.set(p.pid,0);
           s.points += addForAvg;
           if(p.type==='single'){ s.single += 1; if(p.value>=1 && p.value<=12) s.heat[p.value] += 1; }
           else if(p.type==='multi'){ s.multi += 1; }
           else if(p.type==='over'){ s.over += 1; }
-          if(addForAvg > s.maxTurn.v){ s.maxTurn = {v:addForAvg, ts:p.ts, game:g.gameId}; }
         }
       });
 
-      g.players.forEach(pl=>{ const name = pl.name; stat.get(name).games += 1; });
       const nameByIdWin = Object.fromEntries(g.players.map(p=>[p.id,p.name]));
+      g.players.forEach(pl=>{ const name = pl.name; stat.get(name).games += 1; });
       g.winners.forEach(pid=>{ const name = nameByIdWin[pid] || pid; stat.get(name).wins += 1; });
-      perPlayerMaxStreak.forEach((v,pid)=>{ const nm = nameByIdWin[pid] || pid; stat.get(nm).maxMissStreak = Math.max(stat.get(nm).maxMissStreak||0, v); });
     });
 
     const table = document.createElement('table');
     table.innerHTML = `
       <thead>
         <tr>
-          <th>プレイヤー</th><th>試合</th><th>勝</th><th>投擲</th>
+          <th>プレイヤー</th><th>試合</th><th>勝</th><th>勝率</th><th>投擲</th>
           <th>総得点</th><th>平均/投擲</th><th>ミス率</th>
           <th>先攻 平均/投</th><th>後攻 平均/投</th>
           <th>1投目 平均</th>
-          <th>最大得点ターン</th><th>最長ミス連鎖</th>
+          <th>単品比率</th><th>複数比率</th>
         </tr>
       </thead>
       <tbody></tbody>`;
@@ -739,13 +800,18 @@
       const missRate = s.throws? (s.miss/s.throws*100):0;
       const firstAvg = s.firstThrows? (s.firstPoints/s.firstThrows):0;
       const lateAvg  = s.lateThrows ? (s.latePoints /s.lateThrows ):0;
-      const ftAvg    = s.ftCount    ? (s.ftPoints   /s.ftCount    ):0; // ★ 1投目平均
+      const ftAvg    = s.ftCount    ? (s.ftPoints   /s.ftCount    ):0;
+      const denomScore = (s.single + s.multi) || 1;
+      const singlePct = s.single/denomScore*100;
+      const multiPct  = s.multi /denomScore*100;
+      const winRate   = s.games? (s.wins/s.games*100):0;
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="text-align:left;font-weight:600">${escapeHtml(name)}</td>
         <td>${s.games}</td>
         <td>${s.wins}</td>
+        <td>${winRate.toFixed(1)}%</td>
         <td>${s.throws}</td>
         <td>${s.points}</td>
         <td>
@@ -759,20 +825,13 @@
         <td>${firstAvg.toFixed(2)}</td>
         <td>${lateAvg.toFixed(2)}</td>
         <td>${ftAvg.toFixed(2)} <span class="note">(${s.ftCount})</span></td>
-        <td>${s.maxTurn.v||0}</td>
-        <td>${s.maxMissStreak||0}</td>`;
+        <td>${singlePct.toFixed(1)}% <span class="note">(${s.single})</span></td>
+        <td>${multiPct.toFixed(1)}% <span class="note">(${s.multi})</span></td>`;
       tbody.appendChild(tr);
     });
     host.appendChild(table);
 
-    // 3) 最大得点ターン
-    let globalMax = {v:0, name:'-', ts:null, game:null};
-    stat.forEach((s,name)=>{ if(s.maxTurn.v>globalMax.v){ globalMax = {v:s.maxTurn.v, name, ts:s.maxTurn.ts, game:s.maxTurn.game}; } });
-    const gl = el('div',{class:'row', style:'margin:10px 0'});
-    gl.append(el('div',{class:'chip', html:`最大得点ターン <b>${globalMax.v}</b> by <b>${escapeHtml(globalMax.name)}</b>`}));
-    host.appendChild(gl);
-
-    // 4) 単品ヒートマップ
+    // 3) 単品ヒートマップ（簡易そのまま）
     const heatWrap = el('div', {style:'margin-top:10px'});
     heatWrap.append(el('h3',{text:'単品ヒートマップ（1-12）'}));
     const maxCount = Array.from(stat.values()).reduce((m,s)=>Math.max(m, ...(s.heat||[0])),0) || 1;
@@ -788,27 +847,13 @@
       sec.append(grid); heatWrap.append(sec);
     });
     host.appendChild(heatWrap);
-
-    // 5) ゲーム所要時間一覧
-    const gTable = document.createElement('table');
-    gTable.innerHTML = `<thead><tr><th>GameID</th><th>開始</th><th>終了</th><th>所要時間</th><th>投擲数</th><th>平均/投擲(秒)</th></tr></thead><tbody></tbody>`;
-    const gtb = gTable.querySelector('tbody');
-    db.games.forEach(g=>{
-      const dur = (g.endedAt - g.startedAt); const avg = g.plays.length? (dur/1000/g.plays.length):0;
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${g.gameId}</td><td>${fmt(g.startedAt)}</td><td>${fmt(g.endedAt)}</td><td>${secs(dur)}</td><td>${g.plays.length}</td><td>${avg.toFixed(1)}</td>`;
-      gtb.appendChild(tr);
-    });
-    host.appendChild(el('h3',{text:'ゲーム所要時間一覧'}));
-    host.appendChild(gTable);
   }
 
   function fmt(ts){ const d=new Date(ts); return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; }
-  function secs(ms){ const s=Math.round(ms/1000); const m=Math.floor(s/60); const r=s%60; return `${m}分${r}秒`; }
 
   // 起動
   renderSetup();
-  renderNameHistory(); // 最近のプレイヤー候補
+  renderNameHistory();
   if(state.players.length && state.order.length){ switchToBoard(); renderBoard(); }
 })();
 </script>
